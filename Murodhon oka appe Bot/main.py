@@ -1,24 +1,35 @@
 import asyncio
 import datetime
+import os
 import requests
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
-from aiogram.client.session.aiohttp import AiohttpSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from aiohttp import web
 
 # --- 1. SOZLAMALAR ---
 BOT_TOKEN = "8930856087:AAHMEnqG3A_csGtecQWgFyyWu_s8hWiNQFw"
 CHANNEL_ID = -1004493987758
 FIREBASE_PROJECT_ID = "olmastat-bot"
 
-# PythonAnywhere bepul proxy sozlamasi (Telegram API ishlashi uchun zarur)
-session = AiohttpSession(proxy="http://proxy.server:3128")
-
-bot = Bot(token=BOT_TOKEN, session=session)
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+# Render uchun kichik dummy veb-server (Render botni o'chirib qo'ymasligi uchun)
+async def handle(request):
+    return web.Response(text="Bot ishlomoqda...")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
 
 # --- KEYBOARDS ---
 sort_keyboard = ReplyKeyboardMarkup(
@@ -219,6 +230,7 @@ scheduler = AsyncIOScheduler()
 scheduler.add_job(send_daily_report, 'cron', hour=22, minute=0)
 
 async def main():
+    await start_web_server()  # Render uchun portni ishga tushiramiz
     scheduler.start()
     print("Bot muvaffaqiyatli ishga tushdi!")
     await bot.delete_webhook(drop_pending_updates=True)
