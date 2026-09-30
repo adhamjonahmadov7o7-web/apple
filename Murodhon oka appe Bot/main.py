@@ -6,6 +6,7 @@ from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from aiogram.client.session.aiohttp import AiohttpSession
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # --- 1. SOZLAMALAR ---
@@ -13,7 +14,10 @@ BOT_TOKEN = "8930856087:AAHMEnqG3A_csGtecQWgFyyWu_s8hWiNQFw"
 CHANNEL_ID = -1004493987758
 FIREBASE_PROJECT_ID = "olmastat-bot"
 
-bot = Bot(token=BOT_TOKEN)
+# PythonAnywhere bepul proxy sozlamasi (Telegram API ishlashi uchun zarur)
+session = AiohttpSession(proxy="http://proxy.server:3128")
+
+bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
 # --- KEYBOARDS ---
@@ -54,7 +58,6 @@ def get_today_sales_grouped(today_str):
     response = requests.get(url)
     
     total_s1, total_s2, total_s3 = 0, 0, 0
-    # Structure: { "Murodjon": { "🍎 1-sort (Gala)": 300, "🍏 2-sort (Fuji)": 150 } }
     users_data = {}
     
     if response.status_code == 200:
@@ -68,12 +71,10 @@ def get_today_sales_grouped(today_str):
                 qty = int(fields.get("quantity", {}).get("integerValue", 0))
                 user = fields.get("user_name", {}).get("stringValue", "Noma'lum")
                 
-                # Umumiy sortlar bo'yicha yig'ish
                 if "1-sort" in sort: total_s1 += qty
                 elif "2-sort" in sort: total_s2 += qty
                 elif "3-sort" in sort: total_s3 += qty
                 
-                # Foydalanuvchi va sort bo'yicha guruhlash
                 if user not in users_data:
                     users_data[user] = {}
                 
@@ -184,12 +185,11 @@ async def send_daily_report():
     
     total_all = s1 + s2 + s3
     
-    # Xodimlar bo'yicha chiroyli blok yaratish
     users_report_blocks = []
     if users_data:
         for user, sorts in users_data.items():
             user_total = sum(sorts.values())
-            sort_details = "\n".join([f"  ▫️ {sort_name}: {qty} kg" for sort_name, qty in sorts.items()])
+            sort_details = "\n".join([f"  ▫️️ {sort_name}: {qty} kg" for sort_name, qty in sorts.items()])
             block = f"👤 **{user}** (Jami: {user_total} kg):\n{sort_details}"
             users_report_blocks.append(block)
         
@@ -221,6 +221,7 @@ scheduler.add_job(send_daily_report, 'cron', hour=22, minute=0)
 async def main():
     scheduler.start()
     print("Bot muvaffaqiyatli ishga tushdi!")
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
